@@ -2,7 +2,7 @@
 # Description of the ATCA CABB continuum data reduction pipeline              #
 #                                                                             #
 # Cormac Purcell                                                              #
-# 04-Jan-2017                                                                 #
+# 19-May-2017                                                                 #
 #                                                                             #
 #-----------------------------------------------------------------------------#
 
@@ -34,8 +34,8 @@ $> uvsplit in=2010-12-22.uv options=nosource,clobber
   Note: this table is necessary as the pointing names are not unique.
 
 # Script creates the following files:
-./DATA/DB_<freq>.sqlite (sqlite3 database, tables described below).
-./DATA/uvdata/<YYYY-MM-DD>.<freq>.uvindex (index file for the day).
+DATA/DB_<freq>.sqlite (sqlite3 database, tables described below).
+DATA/uvdata/<YYYY-MM-DD>.<freq>.uvindex (index file for the day).
 
 # Database tables:
 # Column name       Example entry
@@ -206,12 +206,12 @@ A DATA directory containing .sqlite database files that have been created by
 the script 1_indxObsDay.py
 
 # DESCRIPTION:
-# Variables set at the begining of the script define the Galactic
-# border of the CORNISH-South survey and the properties of the
-# tiles. This script sets down tiles along constant lines of
-# declination, overlapping by ~60 arcsec. Once the tile centres have
-# been calculated a 'tile_coords' table is written to all '.sqlite'
-# database files found in the './DATA/' directory.
+ Variables set at the begining of the script define the Galactic
+ border of the CORNISH-South survey and the properties of the
+ tiles. This script sets down tiles along constant lines of
+ declination, overlapping by ~60 arcsec. Once the tile centres have
+ been calculated a 'tile_coords' table is written to all '.sqlite'
+ database files found in the '../DATA/' directory.
 
 # Note 1: The script only needs to be run once to fill the "tile_coords" table
   but can be run multiple times without harm (e.g., to visualise the tile
@@ -244,3 +244,34 @@ by the 2_calObsDay.py script. Book-keeping data is stored in the database for
 the relevant frequency configuration, e.g. "DATA/DB_5500.sqlite"
 
 # DESCRIPTION:
+Image one or more tiles from the CORNISH-South dataset using MIRIAD. Images all
+possible fields that overlap the tile footprint, combines them onto a tile and
+crops the tile to a 4000 x 4000 pixel image.
+
+1) Parse the imaging configuration file (imaging<ext>.config) and open the
+database for the current frequency extension.
+2) Query the database for parameters of the requested tile (coordinate, extent,
+pixel-scale).
+3) Query the database for the fields overlapping the tile and their parameters
+(coordinate, extent, pixel-scale)
+4) Loop through each pointing querying the uv-data recorded for each. Construct
+a table of uv-data files for each field with columns indicating whether the
+data has been split out to disk or flagged not to use.
+5) Run UVLIST to get the spectral & uv parameters of the data. Calculate the
+default image parameters from the output and parameters in the config file
+(field of view, frequency range, pimary beam FWHM range, resolution range)
+6) Create a KVIS primary beam annotation file showing the pointing pattern the
+boundary of the tile.
+7) Set the pixel size as 3x the high-frequency resolution and the image size
+as the low-frequency field-of-view x 'fov_FWHM' multiplier in the configuration
+file.
+8) Loop through the pointings:
+  - Create a temp working directory containing symbolic links to the uv-data.
+  - Format selection string to accomplish MFS into one channel
+  - Plot the spectrum of the data
+  - Create a small (0.5xFWHM) Stokes V image and measure the RMS noise.
+  - Create a full-size Stokes I image.
+  - Run MFCLEAN down to a cutoff of 'rms_mult' x RMS.
+  - Restore the CC map and create a residual.
+  - Delete the temp working directory.
+9) Run LINMOS to stitch the field images into a square tile.

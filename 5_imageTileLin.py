@@ -11,7 +11,7 @@
 #                                                                             #
 # NOTE:     If <freqExt> is not supplied then it defaults to '5500'.          #
 #                                                                             #
-# MODIFIED: 04-Jan-2017 by C. Purcell                                         #
+# MODIFIED: 19-May-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -125,15 +125,15 @@ def main():
 
     # Query the database for the tile parameters
     log_wr(LF, "\n> Querying tile parameters ...")
-    tileParmTab = query_tile_parameters(cursor, tileID)
-    if len(tileParmTab)==0:
+    tlTab = query_tile_parameters(cursor, tileID)
+    if len(tlTab)==0:
         log_fail(LF, "\n> Err: No parameters found for that tile.")
 
     # Query the database for the pointings in the tile
     # Return {pntName: [RA_deg, Dec_deg], ...}
     log_wr(LF, "\n> Querying the pointings in tile %s ..." % tileID)
     pntParmDict = query_fields_in_tile(cursor, tileID, radFld_deg)
-    if len(tileParmTab)==0:
+    if len(tlTab)==0:
         log_fail(LF, "\n> Err: No fields found underneath tile footprint.")
     else:
         log_wr(LF, "\n> Found %d fields underneath the tile footprint" % 
@@ -214,6 +214,18 @@ def main():
                                                           freqMax_Hz/1e9,
                                                           freqMin_Hz/1e9))
     
+    # Calculate the positions of the tile corners
+    dDec_deg = abs(tlTab['nPixY'] * tlTab['pixscaleY_asec'] / 3600.0)
+    decHigh_deg = tlTab['Dec_deg'] + dDec_deg / 2.0
+    decLow_deg = tlTab['Dec_deg'] - dDec_deg / 2.0
+    dRA_deg = tlTab['nPixX'] * tlTab['pixScaleX_asec'] /3600.0/2.0
+    dRAtop_deg = dRA_deg/(m.cos(m.radians(decHigh_deg)))
+    dRAbot_deg = dRA_deg/(m.cos(m.radians(decLow_deg)))
+    tlRAtopL_deg = tlTab['RA_deg'] + dRAtop_deg # RA, top-left
+    tlRAtopR_deg = tlTab['RA_deg'] - dRAtop_deg # RA, top-right
+    tlRAbotL_deg = tlTab['RA_deg'] + dRAbot_deg # RA, bottom-left
+    tlRAbotR_deg = tlTab['RA_deg'] - dRAbot_deg # RA, bottom-right
+    
     # Create a primary beam annotation file    
     ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
                '.ann', 'w')
@@ -226,12 +238,19 @@ def main():
         ANN.write("CIRCLE W %f %f %f\n" % (row['RA_deg'],
                                            row['Dec_deg'],
                                            FWHMmax_deg/2.0 ))
-#        ANN.write("COLOUR YELLOW\n")
-#        ANN.write("CIRCLE W %f %f %f\n" % (row['RA_deg'],
-#                                           row['Dec_deg'],
-#                                           (FWHMmax_deg 
-#                                            * float(pDict['fov_FWHM'])
-#                                            /2.0 / 3.0 )))
+        #ANN.write("COLOUR YELLOW\n")
+        #ANN.write("CIRCLE W %f %f %f\n" % (row['RA_deg'],
+        #                                   row['Dec_deg'],
+        #                                   (FWHMmax_deg 
+        #                                    * float(pDict['fov_FWHM'])
+        #                                    /2.0 / 3.0 )))
+        ANN.write("COLOUR WHITE\n")
+        ANN.write("CLINES W %f %f %f %f %f %f %f %f %f %f\n" % \
+                  (tlRAtopL_deg, decHigh_deg,
+                   tlRAtopR_deg, decHigh_deg,
+                   tlRAbotR_deg, decLow_deg,
+                   tlRAbotL_deg, decLow_deg,
+                   tlRAtopL_deg, decHigh_deg))
     ANN.close()
 
     # Set the image resolution parameters: 3 pixels across a beam,
@@ -382,7 +401,7 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
     specPltLst = []
     nchanBin = int(m.floor(pDict['nChan']/int(pDict['nchanImg'])))
     for i in range(int(pDict['nchanImg'])):
-            
+        
         # Line selection
         lineStr = "channel,%d,%d,%d" % (nchanBin,(1+i*nchanBin),1)
         outTab[i]['lineStr'] = lineStr
@@ -431,8 +450,9 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
             except Exception:
                 log_wr(LF, ">> Err: failed to image '%s_CH%s' in Stokes V" %
                        (pntName, (i+1)))
-                continue
-        print 
+                continue            
+        print
+
         # Measure the RMS noise in the centre of the V image
         log_wr(LF, "\n> Measuring the RMS noise in Stokes V")
         outLogTmp = pntName + '_' + 'CH%d' % (i+1) + '_' + str(IFext) + \
