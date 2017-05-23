@@ -11,7 +11,7 @@
 #                                                                             #
 # NOTE:     If <freqExt> is not supplied then it defaults to '5500'.          #
 #                                                                             #
-# MODIFIED: 19-May-2017 by C. Purcell                                         #
+# MODIFIED: 23-May-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -49,7 +49,8 @@ from numpy.lib import recfunctions as rec
 import sqlite3
 
 from Imports.util_ATCA_PIPE import *
-from Imports.util_tables import regexp
+from Imports.util_tables import *
+register_sqlite3_numpy_dtypes()   # Map numpy data-types to sqlite3 data-types
 print "Setting up the MIRpy environment ...",
 sys.stdout.flush()
 from Imports.mirpy import miriad as mir
@@ -111,7 +112,8 @@ def main():
         log_wr(LF, "\n> Successfully parsed the default imaging config file.")
     except Exception:
         log_fail(LF, "\n> Err: Failed to parse the imaging config file.")
-    
+
+        
     # Connect to the database file for the current frequency extension
     dbFile = dataRootDir + '/DB_' + str(IFext) + '.sqlite'
     if os.path.exists(dbFile):
@@ -164,9 +166,6 @@ def main():
             else:
                 exists = 'No'
             log_wr(LF, "     %s exists? %s." %  (uvDataPntPath, exists))
-
-    # DEBUG
-    #sys.exit() 
 
     # Stack the list of recArrays into a new master observation table
     obsTab =  rec.stack_arrays(obsTabLst, autoconvert=True)
@@ -238,12 +237,6 @@ def main():
         ANN.write("CIRCLE W %f %f %f\n" % (row['RA_deg'],
                                            row['Dec_deg'],
                                            FWHMmax_deg/2.0 ))
-        #ANN.write("COLOUR YELLOW\n")
-        #ANN.write("CIRCLE W %f %f %f\n" % (row['RA_deg'],
-        #                                   row['Dec_deg'],
-        #                                   (FWHMmax_deg 
-        #                                    * float(pDict['fov_FWHM'])
-        #                                    /2.0 / 3.0 )))
         ANN.write("COLOUR WHITE\n")
         ANN.write("CLINES W %f %f %f %f %f %f %f %f %f %f\n" % \
                   (tlRAtopL_deg, decHigh_deg,
@@ -272,6 +265,7 @@ def main():
     imgTabLst = []
     
     pntNameLst = pntParmDict.keys()
+    print pntNameLst
     pntNameLst.sort()
     log_wr(LF, "\n> Will image %d pointings ..." % len(pntNameLst))
     for pntName in pntNameLst:
@@ -302,20 +296,14 @@ def main():
                                 stokes="I", redo=redoImg, LF=LF)
         imgTabLst.append(imgTab)
         
-        # Image a pointing in Stokes Q
-#        imgTab = image_pointing(uvData, pntName, imageFieldDir, IFext, pDict,
-#                                stokes="Q", redo=redoImg, LF=LF)
-#        imgTabLst.append(imgTab)
-        
-        # Image a pointing in Stokes U
-#        imgTab = image_pointing(uvData, pntName, imageFieldDir, IFext, pDict,
-#                                stokes="U", redo=redoImg, LF=LF)
-#        imgTabLst.append(imgTab)
-        
         # Clean up
         if os.path.exists(uvDataSplitDir + '/' + tmpDir):
             shutil.rmtree(uvDataSplitDir + '/' + tmpDir, ignore_errors=True)
 
+        # Insert the field paramaters into the database
+        insert_arr_db(cursor, imgTab, 'field_images')
+        conn.commit()
+            
     # Merge the imaging results into a master image table.
     # Filter for unsuccessful imaging attempts
     imgTab =  rec.stack_arrays(imgTabLst, autoconvert=True)
@@ -324,45 +312,63 @@ def main():
     # Linmos the pointing images files into a mosaic file for each channel
     log_wr(LF, "\n> Creating the mosaicked maps ...")
 
-    # Linmos the pointing images files into a mosaic file
+    # Linmos the pointing images files into a mosaic file and crop
     log_wr(LF, "\n> Creating the mosaicked maps ...")
     chanLst = np.unique(imgTab['chan']).tolist()
-    stokesLst = np.unique(imgTab['stokes']).tolist()
     for chan in chanLst:
-        for stokes in stokesLst:
-            log_wr(LF, ">> Stitching maps for channel %d, Stokes %s ..." %
-                   (chan, stokes))
-            imgTabFilt = imgTab[imgTab['chan']==chan]
-            imgTabFilt =imgTabFilt[imgTabFilt['stokes']==stokes]
-            imgDataLst = imgTabFilt['imgClnData'].tolist()
-            log_wr(LF, "   %s" % imgDataLst)
-            tmpDir = ''.join(random.sample(string.letters+string.digits, 8))
-            if os.path.exists(imageFieldDir + '/' + tmpDir):
-                shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
-            os.mkdir(imageFieldDir + '/' + tmpDir)
-            os.chdir(imageFieldDir + '/' + tmpDir)
-            for imgData in imgDataLst:
-                os.symlink('../' + imgData, imgData[:28])
-            os.chdir(startDir)
-            imgIMos = imageTileDir + '/Tile' + str(tileID) + '_' + \
-                      'CH%d' % int(chan) + '_' + str(IFext) + '_' + stokes + \
-                      '.xy'
-            #imgIMos = 'Tile' + str(tileID) + '_' + \
-            #          'CH%d' % int(chan) + '_' + str(IFext) + '_' + stokes + \
-            #          '.xy'
-            
-            if os.path.exists(imgIMos):
-                shutil.rmtree(imgIMos, ignore_errors=True)
-            print mir.linmos(_in=imageFieldDir + '/' + tmpDir + '/*',
-                             out=imgIMos)
-            #imgIMosPath = imageTileDir + '/' + imgIMos
-            #if os.path.exists(imgIMosPath):
-            #    shutil.rmtree(imgIMosPath, ignore_errors=True)
-            #shutil.move(imgIMos, imgIMosPath)
-
-            if os.path.exists(imageFieldDir + '/' + tmpDir):
-                shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
+        log_wr(LF, ">> Stitching maps for channel %d, Stokes I ..." % chan)
+        imgTabFilt = imgTab[imgTab['chan']==chan]
+        imgDataLst = imgTabFilt['imgClnData'].tolist()
+        log_wr(LF, "   %s" % imgDataLst)
+        tmpDir = ''.join(random.sample(string.letters+string.digits, 8))
+        if os.path.exists(imageFieldDir + '/' + tmpDir):
+            shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
+        os.mkdir(imageFieldDir + '/' + tmpDir)
+        os.chdir(imageFieldDir + '/' + tmpDir)
+        for imgData in imgDataLst:
+            os.symlink('../' + imgData, imgData[:28])
+        os.chdir(startDir)
+        imgIMos = imageTileDir + '/Mos' + str(tileID) + '_' + \
+                  'CH%d' % int(chan) + '_' + str(IFext) + '_' + "I" + \
+                  '.xy'        
+        if os.path.exists(imgIMos):
+            shutil.rmtree(imgIMos, ignore_errors=True)
+        print mir.linmos(_in=imageFieldDir + '/' + tmpDir + '/*',
+                         out=imgIMos)
         
+        # Find the reference pixel of the mosaic file
+        outLogTmp = imgIMos + ".PRTHD.log"
+        if os.path.exists(outLogTmp):
+            os.remove(outLogTmp)
+        mir.prthd(_in=imgIMos, log=outLogTmp)
+        cDict = parse_prthd(outLogTmp)
+        os.remove(outLogTmp)
+        
+        # Calculate the crop boundaries
+        dx = (tlTab['RA_deg'] - cDict["x"]/15.0)/cDict["dx"]
+        dy = (tlTab['Dec_deg'] - cDict["y"])/cDict["dy"]
+        regionStr = "relpixel,boxes(-2000,-2000,1999,1999)"
+        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+dx, -2000+dy,
+                                                     1999+dx, 1999+dy)
+
+
+        
+        
+        # Crop the tile to a square boundary
+#        imgITile = imageTileDir + '/Tile' + str(tileID) + '_' + \
+#                   'CH%d' % int(chan) + '_' + str(IFext) + '_' + "I" + \
+#                   '.xy'        
+#        if os.path.exists(imgITile):
+#            shutil.rmtree(imgITile, ignore_errors=True)
+#        print mir.imsub(_in=imgIMos, out=imgITile, region=regionStr)
+
+        # Clean up
+        if os.path.exists(imageFieldDir + '/' + tmpDir):
+            shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
+
+            
+            
+    #region=relcenter,boxes(-2000,-2000,1999,1999)    
     endTime = time.time()
     print "Duration = %.2f min" % ((endTime-startTime)/60.0)
 
@@ -372,10 +378,11 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
                    redo=True, LF=None):
 
     # Create a recarray to hold the results
-    dtype = [('pntName', 'a20'),
+    dtype = [('fieldName', 'a50'),
              ('chan', 'i8'),
              ('lineStr', 'a20'),
              ('stokes', 'a2'),
+             ('rms', 'f4'),
              ('rmsV', 'f4'),
              ('cutoff', 'f4'),
              ('imsize_pix','i8'),
@@ -385,9 +392,15 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
              ('minpatch','i8'),
              ('speed','f4'),
              ('imgClnData', 'a50'),
+             ('beamMajInt_asec','f4'),
+             ('beamMinInt_asec','f4'),
+             ('beamPAint_asec','f4'),
+             ('beamMaj_asec','f4'),
+             ('beamMin_asec','f4'),
+             ('beamPA_asec','f4'),
              ('success','i8')]
     outTab = np.zeros((int(pDict['nchanImg'])), dtype=dtype)
-    outTab['pntName'] = pntName
+    outTab['fieldName'] = pntName
     outTab['stokes'] = stokes
     outTab['imsize_pix'] = int(pDict['imsize_pix'])
     outTab['cellsize_asec'] = float(pDict['cellsize_asec'])
@@ -395,6 +408,18 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
     outTab['niter'] = int(pDict['niter'])
     outTab['minpatch'] = int(pDict['minpatch'])
     outTab['speed'] = float(pDict['speed'])
+    
+    # Parse the restoring beam size or set to blank
+    beamFWHM = ""
+    beamPA = ""
+    if "beam" in pDict:
+        try:
+            beamFWHM = [float(x) for x in pDict["beam"][:2]]
+            beamPA = float(pDict["beam"][2])
+            log_wr(LF, ">> Forcing restoring beam to %s " % pDict["beam"])
+        except Exception:
+            log_wr(LF, ">> Missformed beam value imaging config file ...")
+            log_wr(LF, ">> Setting to default ...")
     
     # Loop through the chosen number of image bins and use the line
     # selection parameter to choose and average channels to image
@@ -433,20 +458,14 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
             log_wr(LF, ">> Skipping: previous version exists ...")
         else:
             try:
-                print "-"*80
-                print pDict['imsizeV_pix']
-                print pDict['imsize_pix']
-                print pDict['cellsize_asec']
-                print "-"*80
-                
-                print mir.invert(vis=uvData,
-                                 map=imgVData,
-                                 imsize=pDict['imsizeV_pix'],
-                                 cell=pDict['cellsize_asec'],
-                                 robust=pDict['robust'],
-                                 options='mfs,sdb,mosaic',
-                                 stokes='v',
-                                 line=lineStr)
+                logInvert = mir.invert(vis=uvData,
+                                       map=imgVData,
+                                       imsize=pDict['imsizeV_pix'],
+                                       cell=pDict['cellsize_asec'],
+                                       robust=pDict['robust'],
+                                       options='mfs,sdb,mosaic',
+                                       stokes='v',
+                                       line=lineStr)
             except Exception:
                 log_wr(LF, ">> Err: failed to image '%s_CH%s' in Stokes V" %
                        (pntName, (i+1)))
@@ -469,9 +488,9 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
         # Call invert to create a dirty map
         log_wr(LF, "\n> Creating a dirty image ...")
         imgData = imageFieldDir + '/' + pntName + '_' + 'CH%d' % (i+1) + \
-                   '_' + str(IFext) + '_' + stokes + '.xy'
+                  '_' + str(IFext) + '_' + stokes + '.xy'
         imgBeam = imageFieldDir + '/' + pntName + '_' + 'CH%d' % (i+1) + \
-                   '_' + str(IFext) + '_' + stokes + '.beam'
+                  '_' + str(IFext) + '_' + stokes + '.beam'
         if redo and (os.path.exists(imgData) or os.path.exists(imgBeam)):
             log_wr(LF, ">> Deleting previous version first ...")
             shutil.rmtree(imgData, ignore_errors=True)
@@ -532,16 +551,47 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
             log_wr(LF, ">> Skipping: previous version exists ...")
         else:
             try:
-                print mir.restor(map=imgData,
-                                 beam=imgBeam,
-                                 out=imgClnPath,
-                                 model=imgModData,
-                                 mode='clean',
-                                 options='mfs')
+                restorStr = mir.restor(map=imgData,
+                                       beam=imgBeam,
+                                       out=imgClnPath,
+                                       model=imgModData,
+                                       mode='clean',
+                                       fwhm=beamFWHM,
+                                       pa=beamPA,
+                                       options='mfs')
+                print restorStr
+                beamMaj, beamMin, beamPA = parse_restorStr(restorStr)
+                outTab[i]['beamMaj_asec'] = beamMaj
+                outTab[i]['beamMin_asec'] = beamMin
+                outTab[i]['beamPA_asec'] = beamPA
             except Exception:
                 log_wr(LF, ">> Err: failed to restore '%s_CH%s' in Stokes %s" %
                        (pntName, (i+1), stokes))
                 continue
+
+        # Measure the intrinsic beam
+        if not beamPA == "":
+            log_wr(LF, "\n> Measuring the un-forced beam ...")
+            tmpClnData = pntName + '_' + 'CH%d' % (i+1) + '_' + str(IFext) + \
+                         '_' + stokes + '.temp'
+            tmpClnPath = imageFieldDir + '/' + tmpClnData
+            if os.path.exists(tmpClnPath):
+                shutil.rmtree(tmpClnPath, ignore_errors=True)
+            try:
+                restorStr = mir.restor(map=imgData,
+                                       beam=imgBeam,
+                                       out=tmpClnPath,
+                                       model=imgModData,
+                                       mode='clean',
+                                       options='mfs')
+                beamMajInt, beamMinInt, beamPAint = parse_restorStr(restorStr)
+                outTab[i]['beamMajInt_asec'] = beamMajInt
+                outTab[i]['beamMinInt_asec'] = beamMinInt
+                outTab[i]['beamPAint_asec'] = beamPAint
+                log_wr(LF, ">> Intrinsic beam size is [%s, %s, %s]" % \
+                       (beamMajInt, beamMinInt, beamPAint))
+            except Exception:
+                log_wr(LF, ">> Err: failed to measure the un-forced beam size.")
 
         # Create a residual map
         log_wr(LF, "\n> Saving a residual map ...")
@@ -564,7 +614,17 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
                        (pntName, (i+1), stokes))
                 continue
     
-        # Stitch the spec plots together into a single file
+        # Measure the RMS noise in the centre of the I residual
+        log_wr(LF, "\n> Measuring the RMS noise in Stokes I residual")
+        outLogTmp = pntName + '_' + 'CH%d' % (i+1) + '_' + str(IFext) + \
+                    '.imstatI.dat'
+        print mir.imstat(_in=imgResData, log=outLogTmp)
+        statDict = parse_imstat(outLogTmp)
+        os.remove(outLogTmp)
+        log_wr(LF, "\n> RMS=%f" % float(statDict['rms']))
+        outTab[i]['rms'] = float(statDict['rms'])
+        
+        # Stitch the spectrum plots together into a single file
         try:
             specPlt = imageFieldDir + '/' + pntName + '_' + str(IFext) + \
                       '_spec.ps'

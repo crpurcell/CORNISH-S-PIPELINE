@@ -7,7 +7,7 @@
 #                                                                             #
 # REQUIRED: Requires numpy.                                                   #
 #                                                                             #
-# MODIFIED: 21-May-2015 by C. Purcell                                         #
+# MODIFIED: 23-May-2015 by C. Purcell                                         #
 #                                                                             #
 # CONTENTS:                                                                   #
 #                                                                             #
@@ -32,6 +32,8 @@
 #  parse_uvlist_spectral .. parse the UVLIST log for channel information      #
 #  parse_uvlist_array   ... parse the UVLIST log for baseline information     #
 #  parse_imstat         ... parse the IMSTAT log                              #
+#  parse_restorStr      ... parse the STDOUT printed by RESTOR                #
+#  parse_prthd          ... parse the PRTHD log                               #
 #  make_lin_axis        ... create linear array from FITS axis key values     #
 #  sort_nicely          ... sort a list in the order a human would            #
 #  merge_dicts          ... marge any number of dictionaries                  #
@@ -1146,10 +1148,80 @@ def parse_imstat(fileName):
             outDict['max'] = float(line[51:61])
             outDict['min'] = float(line[61:71])
             outDict['npix'] = int(line[71:81])
+    FH.close()
+    
+    return outDict
+
+#-----------------------------------------------------------------------------#
+def parse_restorStr(s):
+    """Extract the beam parameters from the output of MIRIAD RESTOR."""
+    
+    # Regular expressions 
+    fwhmRe = re.compile('.*fwhm of\s+(\S+)\s+by\s+(\S+)\s+')
+    paRe = re.compile('Position angle:\s+(\S+)\s+')
+
+    beamMaj = None
+    beamMin = None
+    beamPA = None
+    for line in s.split("\n"):
+        mch = fwhmRe.match(line)
+        if mch:
+            beamMaj = float(mch.group(1))
+            beamMin = float(mch.group(2))
+        mch = paRe.match(line)
+        if mch:
+            beamPA = float(mch.group(1))
+
+    return beamMaj, beamMin, beamPA
+
+          
+#-----------------------------------------------------------------------------#
+def parse_prthd(fileName):
+    """
+    Parse the PRTHD log file for information on the image properties.
+    """
+
+    outDict = {}
+    FH = open(fileName, "r")
+
+    # Regular expressions 
+    typeRe = re.compile('^Type\s+')
+
+    # Read in the input file, line by line
+    readCoords = False
+    srchCount = 0
+    for line in FH:
+        line = line.rstrip("\n\r")
+
+        # Toggle on the 'Type' line
+        if typeRe.match(line):
+            srchCount += 1
+            continue
+        
+        # Type     Pixels  Coord Value  at  Pixel     Coord Incr   Units
+        # RA---CAR  10132   17:10:31.814  9494.00   -3.000000E-01  arcsec
+        if srchCount==1:
+            line = line.split()
+            outDict['xType'] = line[0]
+            outDict['xNpix'] = int(line[1])
+            outDict['x'] = dms2deg(line[2])
+            outDict['xPix'] = line[3]
+            outDict['dx'] = float(line[4])
+            outDict['xUnit'] = line[5]
+        if srchCount==2:
+            line = line.split()
+            outDict['yType'] = line[0]
+            outDict['yNpix'] = int(line[1])
+            outDict['y'] = dms2deg(line[2])
+            outDict['yPix'] = line[3]
+            outDict['dy'] = float(line[4])
+            outDict['yUnit'] = line[5]
+        if srchCount>0:
+            srchCount += 1
             
     return outDict
 
-
+    
 #-----------------------------------------------------------------------------#
 def make_lin_axis(naxis, crpix, crval, cdelt):
     """

@@ -6,11 +6,12 @@
 # PURPOSE:  Helper functions and classes for manipulating numpy recarrays     #
 #           and sqlite3 databases.                                            #
 #                                                                             #
-# MODIFIED: 03-Mar-2015 by C. Purcell                                         #
+# MODIFIED: 23-Mar-2017 by C. Purcell                                         #
 #                                                                             #
 # CONTENTS:                                                                   #
 #                                                                             #
 #  register_sqlite3_numpy_dtypes ... setup sqlite3 to read numpy arrays       #
+#  regexp                   ... regualr expression function for sqlite3       #
 #  schema_to_dtypes         ... parse the schema file for numpy dtypes        #
 #  columns_view             ... return a recarray view filtered by column     #
 #  insert_arr_db            ... insert all recarray entries into the database #
@@ -162,6 +163,10 @@ def insert_arr_db(cursor, recArr, tabName, colNameLst=None,
     
     sql = '%s INTO %s (%s) ' % (insertSQL, tabName, ', '.join(colNameLst))
     sql += 'VALUES(%s) ' % (', '.join(['?']*len(colNameLst)))
+
+    #print sql
+    #print columns_view(recArr, colNameLst)
+    #raw_input()
     cursor.executemany(sql, columns_view(recArr, colNameLst))
 
 
