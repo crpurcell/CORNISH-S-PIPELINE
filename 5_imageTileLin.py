@@ -11,7 +11,7 @@
 #                                                                             #
 # NOTE:     If <freqExt> is not supplied then it defaults to '5500'.          #
 #                                                                             #
-# MODIFIED: 23-May-2017 by C. Purcell                                         #
+# MODIFIED: 24-May-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -345,14 +345,29 @@ def main():
         os.remove(outLogTmp)
         
         # Calculate the crop boundaries
-        dx = (tlTab['RA_deg'] - cDict["x"]/15.0)/cDict["dx"]
+        dx = (tlTab['RA_deg'] - cDict["x"]*15.0)/cDict["dx"]
         dy = (tlTab['Dec_deg'] - cDict["y"])/cDict["dy"]
         regionStr = "relpixel,boxes(-2000,-2000,1999,1999)"
         regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+dx, -2000+dy,
                                                      1999+dx, 1999+dy)
 
-
         
+        ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
+                   'REFPIX.ann', 'w')
+        ANN.write("COLOUR GREEN\n")
+        ANN.write("CROSS W %f %f %f %f\n" % (cDict["x"]*15.0,
+                                             cDict["y"],
+                                             FWHMmax_deg/20.0,
+                                             FWHMmax_deg/20.0 ))
+        ANN.write("COLOUR WHITE\n")
+        ANN.write("CROSS W %f %f %f %f\n" % (tlTab['RA_deg'],
+                                             tlTab['Dec_deg'],
+                                             FWHMmax_deg/20.0,
+                                             FWHMmax_deg/20.0 ))
+        ANN.close()
+        # REF:    9493 9150
+        # CENTRE: 5071 5161
+        # DIFF:   4422 3989
         
         # Crop the tile to a square boundary
 #        imgITile = imageTileDir + '/Tile' + str(tileID) + '_' + \
