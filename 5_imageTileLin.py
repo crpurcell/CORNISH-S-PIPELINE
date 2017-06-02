@@ -353,9 +353,10 @@ def main():
         # REF:    9493 9150 257.632558333333 -38.8060277777778
         # CENTRE: 5071 5161 258.1054375      -39.1384444444444
         # DIFF:   4422 3989
-        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+dx/2, -2000+dy/2,
-                                                     1999+dx/2, 1999+dy/2)
-
+        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+int(dx),
+                                                     -2000+int(dy),
+                                                     1999+int(dx),
+                                                     1999+int(dy))
         
         ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
                    'REFPIX.ann', 'w')

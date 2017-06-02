@@ -1,5 +1,0 @@
-* Extra loop to image small patch without forcing
-* Allow forcing of beam from config file
-* Insert beam parameters into the database.
-* Check original CORNISH for entries.
-* Crop tile using imsub.
