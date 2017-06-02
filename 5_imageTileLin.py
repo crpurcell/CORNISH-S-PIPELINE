@@ -11,7 +11,7 @@
 #                                                                             #
 # NOTE:     If <freqExt> is not supplied then it defaults to '5500'.          #
 #                                                                             #
-# MODIFIED: 24-May-2017 by C. Purcell                                         #
+# MODIFIED: 02-Jun-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -345,11 +345,16 @@ def main():
         os.remove(outLogTmp)
         
         # Calculate the crop boundaries
-        dx = (tlTab['RA_deg'] - cDict["x"]*15.0)/cDict["dx"]
-        dy = (tlTab['Dec_deg'] - cDict["y"])/cDict["dy"]
-        regionStr = "relpixel,boxes(-2000,-2000,1999,1999)"
-        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+dx, -2000+dy,
-                                                     1999+dx, 1999+dy)
+        cosDecRef = np.cos(np.radians(cDict["y"]))
+        dy = (tlTab['Dec_deg'] - cDict["y"])/(cDict["dy"]/3600.0)
+        dx = (tlTab['RA_deg'] - cDict["x"]*15.0)*cosDecRef/(cDict["dx"]/3600.0)
+
+        # MANUAL:
+        # REF:    9493 9150 257.632558333333 -38.8060277777778
+        # CENTRE: 5071 5161 258.1054375      -39.1384444444444
+        # DIFF:   4422 3989
+        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+dx/2, -2000+dy/2,
+                                                     1999+dx/2, 1999+dy/2)
 
         
         ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
@@ -365,25 +370,19 @@ def main():
                                              FWHMmax_deg/20.0,
                                              FWHMmax_deg/20.0 ))
         ANN.close()
-        # REF:    9493 9150
-        # CENTRE: 5071 5161
-        # DIFF:   4422 3989
         
         # Crop the tile to a square boundary
-#        imgITile = imageTileDir + '/Tile' + str(tileID) + '_' + \
-#                   'CH%d' % int(chan) + '_' + str(IFext) + '_' + "I" + \
-#                   '.xy'        
-#        if os.path.exists(imgITile):
-#            shutil.rmtree(imgITile, ignore_errors=True)
-#        print mir.imsub(_in=imgIMos, out=imgITile, region=regionStr)
+        imgITile = imageTileDir + '/Tile' + str(tileID) + '_' + \
+                   'CH%d' % int(chan) + '_' + str(IFext) + '_' + "I" + \
+                   '.xy'        
+        if os.path.exists(imgITile):
+            shutil.rmtree(imgITile, ignore_errors=True)
+        print mir.imsub(_in=imgIMos, out=imgITile, region=regionStr)
 
         # Clean up
         if os.path.exists(imageFieldDir + '/' + tmpDir):
             shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
 
-            
-            
-    #region=relcenter,boxes(-2000,-2000,1999,1999)    
     endTime = time.time()
     print "Duration = %.2f min" % ((endTime-startTime)/60.0)
 
