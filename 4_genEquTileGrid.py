@@ -8,7 +8,7 @@
 # PURPOSE:  Read the pointing coordinates from the mosaic files and lay down  #
 #           grid of Equatorial tiles for image testing purposes.              #
 #                                                                             #
-# MODIFIED: 05-Jan-2017 by C. Purcell                                         #
+# MODIFIED: 05-Jun-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -23,8 +23,8 @@ lMax_deg = 350.2
 lMin_deg = 294.8
 
 # Tile parameters 
-imSize_px = [4000, 4000]              # pixels [x, y] tile size
-pixScale_deg = [0.30/3600, 0.30/3600]   # pixel scale [dx, dy]
+imSize_px = [2000, 2000]              # pixels [x, y] tile size
+pixScale_deg = [0.60/3600, 0.60/3600]   # pixel scale [dx, dy]
 overlap_deg  = [60.0/3600, 60.0/3600]   # overlap between tiles [x, y] (deg)
 
 #-----------------------------------------------------------------------------#

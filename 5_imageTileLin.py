@@ -11,7 +11,7 @@
 #                                                                             #
 # NOTE:     If <freqExt> is not supplied then it defaults to '5500'.          #
 #                                                                             #
-# MODIFIED: 02-Jun-2017 by C. Purcell                                         #
+# MODIFIED: 05-Jun-2017 by C. Purcell                                         #
 #                                                                             #
 #=============================================================================#
 
@@ -353,10 +353,10 @@ def main():
         # REF:    9493 9150 257.632558333333 -38.8060277777778
         # CENTRE: 5071 5161 258.1054375      -39.1384444444444
         # DIFF:   4422 3989
-        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-2000+int(dx),
-                                                     -2000+int(dy),
-                                                     1999+int(dx),
-                                                     1999+int(dy))
+        regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-1000+int(dx),
+                                                     -1000+int(dy),
+                                                     999+int(dx),
+                                                     999+int(dy))
         
         ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
                    'REFPIX.ann', 'w')
@@ -633,7 +633,7 @@ def image_pointing(uvData, pntName, imageFieldDir, IFext, pDict, stokes="I",
         log_wr(LF, "\n> Measuring the RMS noise in Stokes I residual")
         outLogTmp = pntName + '_' + 'CH%d' % (i+1) + '_' + str(IFext) + \
                     '.imstatI.dat'
-        print mir.imstat(_in=imgResData, log=outLogTmp)
+        print mir.imstat(_in=imgResData, region='perc(33)', log=outLogTmp)
         statDict = parse_imstat(outLogTmp)
         os.remove(outLogTmp)
         log_wr(LF, "\n> RMS=%f" % float(statDict['rms']))
