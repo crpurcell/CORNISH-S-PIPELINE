@@ -381,7 +381,8 @@ def main():
         if os.path.exists(imgITile):
             shutil.rmtree(imgITile, ignore_errors=True)
         print mir.imsub(_in=imgIMos, out=imgITile, region=regionStr)
-
+        shutil.rmtree(imgIMos, ignore_errors=True)
+        
         # Clean up
         if os.path.exists(imageFieldDir + '/' + tmpDir):
             shutil.rmtree(imageFieldDir + '/' + tmpDir, ignore_errors=True)
