@@ -170,9 +170,9 @@ def main():
     # Stack the list of recArrays into a new master observation table
     obsTab =  rec.stack_arrays(obsTabLst, autoconvert=True)
     obsTab.sort(order=['dayName','pntName'])
-    log_wr(LF, ">> Will image the following uv-data:")
+    log_wr(LF, ">> Will image the following uv-data:")    
     for row in obsTab:
-        log_wr(LF, "%s" % row)
+        log_wr(LF, "%s" % list(row))
 
     # Calculate the default image parameters
     uvData0 = uvDataSplitDir + '/' + obsTab['timeStamp'][0] +  '_' + \
@@ -344,33 +344,35 @@ def main():
         cDict = parse_prthd(outLogTmp)
         os.remove(outLogTmp)
         
-        # Calculate the crop boundaries
+        # Calculate the crop boundaries anf format the region string
+        # TODO: Remove hard-coded assumptions about tile size
         cosDecRef = np.cos(np.radians(cDict["y"]))
         dy = (tlTab['Dec_deg'] - cDict["y"])/(cDict["dy"]/3600.0)
         dx = (tlTab['RA_deg'] - cDict["x"]*15.0)*cosDecRef/(cDict["dx"]/3600.0)
-
-        # MANUAL:
-        # REF:    9493 9150 257.632558333333 -38.8060277777778
-        # CENTRE: 5071 5161 258.1054375      -39.1384444444444
-        # DIFF:   4422 3989
         regionStr = "relpixel,boxes(%d,%d,%d,%d)" % (-1000+int(dx),
                                                      -1000+int(dy),
                                                      999+int(dx),
                                                      999+int(dy))
-        
-        ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
-                   'REFPIX.ann', 'w')
-        ANN.write("COLOUR GREEN\n")
-        ANN.write("CROSS W %f %f %f %f\n" % (cDict["x"]*15.0,
-                                             cDict["y"],
-                                             FWHMmax_deg/20.0,
-                                             FWHMmax_deg/20.0 ))
-        ANN.write("COLOUR WHITE\n")
-        ANN.write("CROSS W %f %f %f %f\n" % (tlTab['RA_deg'],
-                                             tlTab['Dec_deg'],
-                                             FWHMmax_deg/20.0,
-                                             FWHMmax_deg/20.0 ))
-        ANN.close()
+
+        # MANUAL COORDS FOR Tile 1481:
+        # REF:    9493 9150 257.632558333333 -38.8060277777778
+        # CENTRE: 5071 5161 258.1054375      -39.1384444444444
+        # DIFF:   4422 3989
+
+        # DEBUG
+        #ANN = open(imageTileDir + '/Tile_' + str(tileID) + '_' + str(IFext) + \
+        #           '.REFPIX.ann', 'w')
+        #ANN.write("COLOUR GREEN\n")
+        #ANN.write("CROSS W %f %f %f %f\n" % (cDict["x"]*15.0,
+        #                                     cDict["y"],
+        #                                     FWHMmax_deg/20.0,
+        #                                     FWHMmax_deg/20.0 ))
+        #ANN.write("COLOUR WHITE\n")
+        #ANN.write("CROSS W %f %f %f %f\n" % (tlTab['RA_deg'],
+        #                                     tlTab['Dec_deg'],
+        #                                     FWHMmax_deg/20.0,
+        #                                     FWHMmax_deg/20.0 ))
+        #ANN.close()
         
         # Crop the tile to a square boundary
         imgITile = imageTileDir + '/Tile' + str(tileID) + '_' + \

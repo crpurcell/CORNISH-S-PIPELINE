@@ -199,7 +199,7 @@ For PGFLAG, flag in order: XX, YY, XY, YX & apply to all.
 #-----------------------------------------------------------------------------#
 
 # USAGE:
-$> ./2_genEquTileGrid.py
+$> ./4_genEquTileGrid.py
 
 # REQUIRES:
 A DATA directory containing .sqlite database files that have been created by
